@@ -1,0 +1,12 @@
+DeviceTvmSecureConfigurationAssessment
+| where Timestamp > ago(30d)
+| extend NomeCurto = tostring(split(tolower(DeviceName), ".")[0])
+| summarize UltimoSinal = max(Timestamp) by DeviceId, NomeCurto
+| summarize ['Registros no Defender'] = dcount(DeviceId),
+            ['Sinal mais recente'] = max(UltimoSinal),
+            ['Sinal mais antigo'] = min(UltimoSinal),
+            ['DeviceIds'] = make_set(DeviceId)
+    by ['Máquina'] = NomeCurto
+| where ['Registros no Defender'] > 1
+| extend ['Dias entre o registro vivo e o morto'] = toint((['Sinal mais recente'] - ['Sinal mais antigo']) / 1d)
+| sort by ['Dias entre o registro vivo e o morto'] desc
