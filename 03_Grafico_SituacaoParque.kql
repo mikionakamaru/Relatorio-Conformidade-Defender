@@ -1,0 +1,26 @@
+let Janela = 30d;
+let AlertaVacina = 7;
+let CriticoVacina = 14;
+let AlertaComunicacao = 7;
+let Inventario = DeviceTvmSecureConfigurationAssessment
+    | where Timestamp > ago(Janela)
+    | summarize arg_max(Timestamp, DeviceName) by DeviceId
+    | extend DiasSemReportar = toint((now() - Timestamp) / 1d)
+    | project DeviceId, DiasSemReportar;
+let Vacina = DeviceTvmSecureConfigurationAssessment
+    | where Timestamp > ago(Janela) and ConfigurationId == "scid-2011" and isnotnull(Context)
+    | summarize arg_max(Timestamp, Context) by DeviceId
+    | extend VersaoVacina = tostring(parse_json(Context)[0][0]),
+             DataVacina = todatetime(tostring(parse_json(Context)[0][2]))
+    | extend DiasSemVacina = toint((now() - DataVacina) / 1d)
+    | project DeviceId, VersaoVacina, DiasSemVacina;
+Inventario
+| join kind=leftouter (Vacina) on DeviceId
+| extend Situacao = case(
+    DiasSemReportar >= AlertaComunicacao, "Sem reportar ao Defender",
+    isempty(VersaoVacina), "Sem informacao de vacina",
+    DiasSemVacina >= CriticoVacina, "Vacina critica",
+    DiasSemVacina >= AlertaVacina, "Vacina atrasada",
+    "Protegida e atualizada")
+| summarize ['Máquinas'] = dcount(DeviceId) by ['Situação'] = Situacao
+| render piechart
