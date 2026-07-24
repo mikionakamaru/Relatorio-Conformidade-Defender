@@ -1,0 +1,63 @@
+let Janela = 30d;
+let AlertaVacina = 7;
+let CriticoVacina = 14;
+let AlertaComunicacao = 7;
+let Inventario = DeviceTvmSecureConfigurationAssessment
+    | where Timestamp > ago(Janela)
+    | summarize arg_max(Timestamp, DeviceName, OSPlatform) by DeviceId
+    | extend DiasSemReportar = toint((now() - Timestamp) / 1d)
+    | project DeviceId, DeviceName, OSPlatform, UltimaAvaliacao = Timestamp, DiasSemReportar;
+let ModoAV = DeviceTvmSecureConfigurationAssessment
+    | where Timestamp > ago(Janela) and ConfigurationId == "scid-2010" and isnotnull(Context)
+    | summarize arg_max(Timestamp, Context) by DeviceId
+    | extend Modo = tostring(parse_json(Context)[0][0])
+    | extend ModoAntivirus = case(
+        Modo == "0", "Ativo (Defender protegendo)",
+        Modo == "1", "Passivo (outro antivirus no comando)",
+        Modo == "4", "Somente EDR (antivirus de terceiro no comando)",
+        "Nao identificado")
+    | project DeviceId, ModoAntivirus;
+let Vacina = DeviceTvmSecureConfigurationAssessment
+    | where Timestamp > ago(Janela) and ConfigurationId == "scid-2011" and isnotnull(Context)
+    | summarize arg_max(Timestamp, Context) by DeviceId
+    | extend Dados = parse_json(Context)
+    | extend VersaoVacina = tostring(Dados[0][0]),
+             VersaoMotor = tostring(Dados[0][1]),
+             DataVacina = todatetime(tostring(Dados[0][2]))
+    | extend DiasSemVacina = toint((now() - DataVacina) / 1d)
+    | project DeviceId, VersaoVacina, VersaoMotor, DataVacina, DiasSemVacina;
+Inventario
+| join kind=leftouter (ModoAV) on DeviceId
+| join kind=leftouter (Vacina) on DeviceId
+| extend Situacao = case(
+    DiasSemReportar >= AlertaComunicacao, strcat("Sem reportar ao Defender ha ", tostring(DiasSemReportar), " dias"),
+    isempty(VersaoVacina), "Sem informacao de vacina do antivirus",
+    DiasSemVacina >= CriticoVacina, strcat("Vacina critica: ", tostring(DiasSemVacina), " dias sem atualizar"),
+    DiasSemVacina >= AlertaVacina, strcat("Vacina atrasada: ", tostring(DiasSemVacina), " dias sem atualizar"),
+    "Protegida e atualizada")
+| extend Prioridade = case(
+    Situacao startswith "Sem reportar", "1 - Critico",
+    Situacao startswith "Vacina critica", "2 - Alto",
+    Situacao startswith "Vacina atrasada", "3 - Medio",
+    Situacao startswith "Sem informacao de vacina", "3 - Medio",
+    "5 - Sem acao")
+| extend AcaoRecomendada = case(
+    Prioridade == "5 - Sem acao", "Nenhuma acao necessaria",
+    Situacao startswith "Sem reportar", "Confirmar se a maquina esta ativa e se o agente do Defender esta comunicando",
+    Situacao startswith "Vacina", "Forcar atualizacao de assinatura e verificar acesso ao Windows Update / WSUS",
+    Situacao startswith "Sem informacao de vacina", "Verificar se o Defender Antivirus esta ativo na maquina",
+    "Analisar caso a caso")
+| project
+    ['Máquina'] = DeviceName,
+    ['Prioridade'] = Prioridade,
+    ['Situação'] = Situacao,
+    ['Ação recomendada'] = AcaoRecomendada,
+    ['Sistema operacional'] = OSPlatform,
+    ['Modo do antivírus'] = ModoAntivirus,
+    ['Versão da vacina'] = VersaoVacina,
+    ['Versão do motor'] = VersaoMotor,
+    ['Data da última vacina'] = DataVacina,
+    ['Dias sem atualizar a vacina'] = DiasSemVacina,
+    ['Último dado recebido do Defender'] = UltimaAvaliacao,
+    ['Dias sem reportar'] = DiasSemReportar
+| sort by ['Prioridade'] asc, ['Dias sem atualizar a vacina'] desc, ['Máquina'] asc
