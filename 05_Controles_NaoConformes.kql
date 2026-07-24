@@ -1,0 +1,13 @@
+DeviceTvmSecureConfigurationAssessment
+| where Timestamp > ago(30d)
+| summarize arg_max(Timestamp, IsCompliant, IsApplicable) by DeviceId, ConfigurationId
+| where IsApplicable == 1 and IsCompliant == 0
+| summarize Maquinas = dcount(DeviceId) by ConfigurationId
+| join kind=inner (
+    DeviceTvmSecureConfigurationAssessmentKB
+    | project ConfigurationId, ConfigurationName
+    ) on ConfigurationId
+| project ['Controle de segurança'] = substring(ConfigurationName, 0, 40),
+          ['Máquinas afetadas'] = Maquinas
+| top 10 by ['Máquinas afetadas'] desc
+| render columnchart
