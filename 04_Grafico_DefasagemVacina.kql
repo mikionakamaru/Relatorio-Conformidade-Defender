@@ -1,0 +1,14 @@
+DeviceTvmSecureConfigurationAssessment
+| where Timestamp > ago(30d) and ConfigurationId == "scid-2011" and isnotnull(Context)
+| summarize arg_max(Timestamp, Context) by DeviceId
+| extend DiasSemVacina = toint((now() - todatetime(tostring(parse_json(Context)[0][2]))) / 1d)
+| extend Faixa = case(
+    DiasSemVacina <= 1, "1. Ate 1 dia",
+    DiasSemVacina <= 3, "2. De 2 a 3 dias",
+    DiasSemVacina <= 7, "3. De 4 a 7 dias",
+    DiasSemVacina <= 14, "4. De 8 a 14 dias",
+    DiasSemVacina <= 30, "5. De 15 a 30 dias",
+    "6. Mais de 30 dias")
+| summarize ['Máquinas'] = dcount(DeviceId) by ['Defasagem da vacina'] = Faixa
+| sort by ['Defasagem da vacina'] asc
+| render columnchart
