@@ -63,7 +63,7 @@ resultado com a tela de asset do portal, que aplica a mesma régua de tempo.
 
 ## Como usar
 
-1. Portal do Microsoft Defender, menu **Caça**, aba **Caça avançada**.
+1. Portal do Microsoft Defender, menu **Hunting**, aba **Advanced Hunting**.
 2. Cole o conteúdo do arquivo e execute.
 3. Nas queries de gráfico, o resultado já vem renderizado.
 4. Para exportar, use **Exportar** no canto superior direito da grade.
