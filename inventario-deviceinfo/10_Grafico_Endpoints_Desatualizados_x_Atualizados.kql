@@ -1,0 +1,8 @@
+let DiasDesatualizado = 7;
+DeviceTvmSecureConfigurationAssessment
+| where Timestamp > ago(30d) and ConfigurationId == "scid-2011" and isnotnull(Context)
+| summarize arg_max(Timestamp, Context) by DeviceId
+| extend DiasSemVacina = toint((now() - todatetime(tostring(parse_json(Context)[0][2]))) / 1d)
+| extend Situacao = iff(DiasSemVacina >= DiasDesatualizado, "Desatualizado", "Atualizado")
+| summarize Maquinas = dcount(DeviceId) by Situacao
+| render piechart

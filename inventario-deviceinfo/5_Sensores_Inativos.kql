@@ -1,0 +1,26 @@
+let DiasParaAtivo = 7;
+DeviceInfo
+| where Timestamp > ago(30d)
+| summarize arg_max(Timestamp, *) by DeviceId
+| extend DiasSemReportar = toint((now() - Timestamp) / 1d)
+| where SensorHealthState in ("Inactive", "Misconfigured", "No sensor data")
+      or (SensorHealthState == "Active" and DiasSemReportar > DiasParaAtivo)
+| extend ['Health Status'] = case(
+    SensorHealthState == "Active" and DiasSemReportar > DiasParaAtivo,
+        strcat("Inactive (sem reportar ha ", tostring(DiasSemReportar), " dias)"),
+    SensorHealthState)
+| project
+    ['Device ID'] = DeviceId,
+    ['Device Name'] = DeviceName,
+    ['Device Category'] = DeviceCategory,
+    ['Device Type'] = DeviceType,
+    ['Device Subtype'] = DeviceSubtype,
+    ['Discovery sources'] = tostring(DiscoverySources),
+    ['AAD Device Id'] = AadDeviceId,
+    ['Last device update'] = Timestamp,
+    ['Dias sem reportar'] = DiasSemReportar,
+    ['OS Platform'] = OSPlatform,
+    ['OS Distribution'] = OSDistribution,
+    ['Health Status'],
+    ['Onboarding Status'] = OnboardingStatus
+| sort by ['Dias sem reportar'] desc

@@ -1,0 +1,20 @@
+DeviceInfo
+| where Timestamp > ago(30d)
+| summarize arg_max(Timestamp, *) by DeviceId
+| where SensorHealthState == "Inactive"
+| extend ['Last device update'] = Timestamp,
+         ['Windows 10 Version'] = tostring(parse_json(AdditionalFields).OSVersion)
+| project
+    ['Device Name'] = DeviceName,
+    ['Last device update'],
+    ['OS Platform'] = OSPlatform,
+    ['OS Distribution'] = OSDistribution,
+    ['OS Version'] = OSVersion,
+    ['OS Build'] = OSBuild,
+    ['Windows 10 Version'],
+    ['Tags'] = tostring(DeviceManualTags),
+    ['Group'] = MachineGroup,
+    ['Health Status'] = SensorHealthState,
+    ['Onboarding Status'] = OnboardingStatus,
+    ['Managed By'] = tostring(parse_json(AdditionalFields).ManagedBy)
+| sort by ['Last device update'] asc

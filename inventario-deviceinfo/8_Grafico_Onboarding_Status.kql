@@ -1,0 +1,6 @@
+DeviceInfo
+| where Timestamp > ago(30d)
+| summarize arg_max(Timestamp, OnboardingStatus) by DeviceId
+| summarize Maquinas = dcount(DeviceId) by OnboardingStatus
+| sort by Maquinas desc
+| render columnchart

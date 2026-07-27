@@ -1,0 +1,34 @@
+let DiasDesatualizado = 7;
+let ModoAV = DeviceTvmSecureConfigurationAssessment
+    | where Timestamp > ago(30d) and ConfigurationId == "scid-2010" and isnotnull(Context)
+    | summarize arg_max(Timestamp, Context) by DeviceId
+    | extend Modo = tostring(parse_json(Context)[0][0])
+    | extend ['AV mode'] = case(
+        Modo == "0", "Active",
+        Modo == "1", "Passive",
+        Modo == "4", "EDR Blocked",
+        "Unknown")
+    | project DeviceId, ['AV mode'];
+let Vacina = DeviceTvmSecureConfigurationAssessment
+    | where Timestamp > ago(30d) and ConfigurationId == "scid-2011" and isnotnull(Context)
+    | summarize arg_max(Timestamp, Context) by DeviceId
+    | extend ['Security intel version'] = tostring(parse_json(Context)[0][0]),
+             DataVacina = todatetime(tostring(parse_json(Context)[0][2]))
+    | extend DiasSemVacina = toint((now() - DataVacina) / 1d)
+    | project DeviceId, ['Security intel version'], DataVacina, DiasSemVacina;
+DeviceInfo
+| where Timestamp > ago(30d)
+| summarize arg_max(Timestamp, DeviceName, MachineGroup, OSPlatform, OSVersion) by DeviceId
+| join kind=inner (Vacina) on DeviceId
+| join kind=leftouter (ModoAV) on DeviceId
+| where DiasSemVacina >= DiasDesatualizado
+| project
+    ['Device name'] = DeviceName,
+    ['Device group'] = MachineGroup,
+    ['OS platform'] = OSPlatform,
+    ['OS version'] = OSVersion,
+    ['AV mode'],
+    ['Security intel version'],
+    ['Dias sem atualizar'] = DiasSemVacina,
+    ['Last seen'] = DataVacina
+| sort by ['Dias sem atualizar'] desc

@@ -1,0 +1,8 @@
+let DiasParaAtivo = 7;
+DeviceInfo
+| where Timestamp > ago(30d)
+| summarize arg_max(Timestamp, SensorHealthState) by DeviceId
+| extend DiasSemReportar = toint((now() - Timestamp) / 1d)
+| extend Situacao = iff(SensorHealthState == "Active" and DiasSemReportar <= DiasParaAtivo, "Ativo", "Inativo")
+| summarize Maquinas = dcount(DeviceId) by Situacao
+| render piechart

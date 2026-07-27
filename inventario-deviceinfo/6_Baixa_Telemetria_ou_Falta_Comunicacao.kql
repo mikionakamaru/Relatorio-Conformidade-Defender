@@ -1,0 +1,26 @@
+let DiasSemEventos = 3;
+let Eventos = union
+    (DeviceProcessEvents | where Timestamp > ago(30d) | project Timestamp, DeviceId, DeviceName),
+    (DeviceNetworkEvents | where Timestamp > ago(30d) | project Timestamp, DeviceId, DeviceName),
+    (DeviceFileEvents    | where Timestamp > ago(30d) | project Timestamp, DeviceId, DeviceName)
+    | summarize EventCount = count(), LastSeen = max(Timestamp) by DeviceId, DeviceName;
+DeviceInfo
+| where Timestamp > ago(30d)
+| summarize arg_max(Timestamp, DeviceName, SensorHealthState, OnboardingStatus) by DeviceId
+| where OnboardingStatus == "Onboarded"
+| join kind=leftouter (Eventos) on DeviceId
+| extend EventCount = coalesce(EventCount, 0),
+         LastSeen = coalesce(LastSeen, Timestamp)
+| extend DaysWithoutEvents = toint((now() - LastSeen) / 1d)
+| where DaysWithoutEvents >= DiasSemEventos or EventCount == 0
+| extend DeviceStatus = case(
+    EventCount == 0, "Sem telemetria nenhuma",
+    DaysWithoutEvents >= 7, "Comunicacao possivelmente interrompida",
+    "Telemetria baixa")
+| project
+    ['DeviceName'] = DeviceName,
+    ['LastSeen [UTC]'] = LastSeen,
+    ['DaysWithoutEvents'] = DaysWithoutEvents,
+    ['EventCount'] = EventCount,
+    ['DeviceStatus'] = DeviceStatus
+| sort by ['DaysWithoutEvents'] desc, ['EventCount'] asc
